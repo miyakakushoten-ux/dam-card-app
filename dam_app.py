@@ -139,18 +139,35 @@ pref_list = st.session_state.pref_list
 default_index = pref_list.index('愛知県') if '愛知県' in pref_list else 0
 
 # --- UI上部：都道府県選択（タイトル文字そのものをクリックできるボタンにする） ---
-if "selected_pref" not in st.session_state:
+if "selected_pref" not in st.session_state or st.session_state.selected_pref not in pref_list:
     st.session_state.selected_pref = pref_list[default_index]
 
-with st.popover(f"{st.session_state.selected_pref}ダム"):
-    st.radio(
-        "表示する県を選択",
-        pref_list,
-        key="selected_pref",
-        label_visibility="collapsed"
-    )
+if "pref_radio_ver" not in st.session_state:
+    st.session_state.pref_radio_ver = 0
+
+def on_pref_change(radio_key):
+    st.session_state.selected_pref = st.session_state[radio_key]
+    st.session_state.pref_radio_ver += 1
 
 selected_pref = st.session_state.selected_pref
+
+# 現在表示中の県が小窓の中央付近（上から4番目）に来るようにリストを循環させる
+current_pref_idx = pref_list.index(selected_pref)
+center_offset = min(3, len(pref_list) // 2)
+start_idx = (current_pref_idx - center_offset) % len(pref_list)
+display_pref_list = pref_list[start_idx:] + pref_list[:start_idx]
+radio_key = f"pref_radio_{st.session_state.pref_radio_ver}"
+
+with st.popover(f"{selected_pref}ダム"):
+    st.radio(
+        "表示する県を選択",
+        display_pref_list,
+        index=display_pref_list.index(selected_pref),
+        key=radio_key,
+        on_change=on_pref_change,
+        args=(radio_key,),
+        label_visibility="collapsed"
+    )
 
 # 選択された県のデータに絞り込み
 filtered_df = st.session_state.dam_data[st.session_state.dam_data['県名'] == selected_pref]
