@@ -1,9 +1,9 @@
 import os
 import json
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import folium
-from streamlit_folium import st_folium
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -321,8 +321,8 @@ if st.session_state.is_front:
     # --- 表面（地図）用のCSS ---
     mode_css = """
 <style>
-/* カード内側の枠（茶色い枠線を復活させ、太さ・角丸をカード幅に連動させる） */
-div[data-testid="stVerticalBlock"]:has(iframe[title="streamlit_folium.st_folium"]):not(:has(div[data-testid="stVerticalBlock"])) {
+/* カード内側の枠を1.5:1の比率に固定し、茶色い枠線と角丸をカード幅に連動させる */
+.block-container div[data-testid="stVerticalBlock"]:has(iframe):not(:has(div[data-testid="stVerticalBlock"])) {
     border: calc(var(--u) * 1.0) solid #8b5a2b !important;
     border-radius: calc(var(--u) * 0.8) !important;
     background-color: white !important;
@@ -330,29 +330,39 @@ div[data-testid="stVerticalBlock"]:has(iframe[title="streamlit_folium.st_folium"
     gap: 0 !important;
     position: relative !important;
     width: 100% !important;
+    aspect-ratio: 1.5 / 1 !important;
     overflow: hidden !important;
     box-sizing: border-box !important;
 }
-/* 地図の下にわずかな白線が入るのを防ぐ */
-div[data-testid="stElementContainer"]:has(iframe[title="streamlit_folium.st_folium"]),
-div.element-container:has(iframe[title="streamlit_folium.st_folium"]) {
+/* 地図を含む要素を茶色い枠の縦横100%に隙間なくピタッと広げる */
+.block-container div[data-testid="stElementContainer"]:has(iframe),
+.block-container div.element-container:has(iframe) {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
     line-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
 }
+.block-container div[data-testid="stElementContainer"]:has(iframe) > div,
+.block-container div.element-container:has(iframe) > div {
+    width: 100% !important;
+    height: 100% !important;
+}
 /* 進捗テキスト用の見えない箱が下に隙間を作らないようにする */
-div[data-testid="stElementContainer"]:has(.progress-overlay),
-div.element-container:has(.progress-overlay) {
+.block-container div[data-testid="stElementContainer"]:has(.progress-overlay),
+.block-container div.element-container:has(.progress-overlay) {
     height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     position: static !important;
 }
-/* iframe（地図）の縦横比を1.5:1に固定し、横幅に合わせて高さも自動追従させる */
-iframe[title="streamlit_folium.st_folium"] {
+/* iframe（地図本体）を親枠の縦横100%に完全追従させる */
+.block-container iframe {
     width: 100% !important;
-    height: auto !important;
-    aspect-ratio: 1.5 / 1 !important;
+    height: 100% !important;
     border: none !important;
     display: block !important;
 }
@@ -508,14 +518,9 @@ with card_inner:
                 icon=custom_icon
             ).add_to(m)
             
-        # 県を切り替えた際に地図位置を確実に更新するため、県名ごとのkeyを設定
-        st_folium(
-            m,
-            height=500,
-            use_container_width=True,
-            returned_objects=[],
-            key=f"dam_map_{selected_pref}"
-        )
+        # 枠の縦横100%に自動追従するHTML形式で地図を描画
+        map_html = m.get_root().render()
+        components.html(map_html, height=500, scrolling=False)
         
         # 地図の上に赤文字の進捗を浮かせる
         st.markdown(f"<div class='progress-overlay'>{progress_str}</div>", unsafe_allow_html=True)
