@@ -183,11 +183,11 @@ div[data-testid="stAppViewContainer"] {
     --u: calc(var(--card-w) / 100);
 }
 
-/* 1. カード全体の外枠（紺色・周囲の余白をなくしウィンドウにピッタリ合わせる） */
+/* 1. カード全体の外枠（紺色・周囲の余白をなくし下側をスリム化） */
 .block-container {
     background-color: #1f3b58 !important;
     border-radius: calc(var(--u) * 2) !important;
-    padding: calc(var(--u) * 1.8) calc(var(--u) * 2.8) calc(var(--u) * 1.8) calc(var(--u) * 2.8) !important;
+    padding: calc(var(--u) * 1.6) calc(var(--u) * 2.8) calc(var(--u) * 1.2) calc(var(--u) * 2.8) !important;
     max-width: var(--card-w) !important;
     width: var(--card-w) !important;
     margin: 0 auto !important;
@@ -288,31 +288,89 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:last-child {
     white-space: nowrap !important;
 }
 
-/* 右下の切り替えボタン（文字もボタン枠もカード幅に連動） */
-div.stButton {
-    margin-top: 0 !important;
+/* 右下の切り替えボタン（上部の余白を完全に消し、文字を上下中央へ揃えてスリム化） */
+div.stButton,
+div[data-testid="stButton"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1 !important;
 }
-.stButton button {
-    background-color: rgba(255,255,255,0.1);
-    color: white;
-    border: 1px solid rgba(255,255,255,0.3);
+.stButton button,
+div[data-testid="stButton"] button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background-color: rgba(255,255,255,0.1) !important;
+    color: white !important;
+    border: 1px solid rgba(255,255,255,0.3) !important;
     border-radius: calc(var(--u) * 0.75) !important;
-    padding: calc(var(--u) * 0.8) calc(var(--u) * 1.8) !important;
+    padding: calc(var(--u) * 0.45) calc(var(--u) * 1.5) !important;
+    margin: 0 !important;
     min-height: 0 !important;
     height: auto !important;
     line-height: 1.2 !important;
     font-size: calc(var(--u) * 1.8) !important;
-    font-weight: bold;
+    font-weight: bold !important;
     white-space: nowrap !important;
 }
-.stButton button p {
-    font-size: calc(var(--u) * 1.8) !important;
+.stButton button div[data-testid="stMarkdownContainer"],
+div[data-testid="stButton"] button div[data-testid="stMarkdownContainer"],
+.stButton button p,
+div[data-testid="stButton"] button p,
+div[data-testid="stPopover"] button p {
+    margin: 0 !important;
+    padding: 0 !important;
     line-height: 1.2 !important;
 }
-.stButton button:hover {
-    background-color: #FFD700;
-    color: #1f3b58;
-    border-color: #FFD700;
+.stButton button p,
+div[data-testid="stButton"] button p {
+    font-size: calc(var(--u) * 1.8) !important;
+}
+.stButton button:hover,
+div[data-testid="stButton"] button:hover {
+    background-color: #FFD700 !important;
+    color: #1f3b58 !important;
+    border-color: #FFD700 !important;
+}
+
+/* スマホ横画面専用：左右に安全余白を残しつつ画面いっぱいに横長ワイド化 */
+@media (orientation: landscape) and (max-height: 520px) {
+    :root {
+        --u: calc(100vh / 68);
+        --u: calc(100dvh / 68);
+    }
+    .block-container {
+        width: 90vw !important;
+        max-width: 90vw !important;
+        min-height: 100vh !important;
+        min-height: 100dvh !important;
+        padding: calc(var(--u) * 0.9) calc(var(--u) * 2.0) calc(var(--u) * 0.7) calc(var(--u) * 2.0) !important;
+        border-radius: calc(var(--u) * 1.5) !important;
+    }
+    .block-container div[data-testid="stVerticalBlock"] {
+        gap: calc(var(--u) * 0.55) !important;
+    }
+    div[data-testid="stPopover"] button {
+        padding: calc(var(--u) * 0.2) calc(var(--u) * 0.8) !important;
+    }
+    div[data-testid="stPopover"] button p {
+        font-size: calc(var(--u) * 3.1) !important;
+    }
+    div[data-testid="stPopoverBody"] {
+        max-height: 65dvh !important;
+    }
+    .card-version {
+        font-size: max(10px, calc(var(--u) * 1.7)) !important;
+    }
+    .stButton button,
+    div[data-testid="stButton"] button {
+        padding: calc(var(--u) * 0.35) calc(var(--u) * 1.4) !important;
+        font-size: max(11px, calc(var(--u) * 1.75)) !important;
+    }
+    .stButton button p,
+    div[data-testid="stButton"] button p {
+        font-size: max(11px, calc(var(--u) * 1.75)) !important;
+    }
 }
 </style>
 """
@@ -378,6 +436,14 @@ if st.session_state.is_front:
     line-height: 1 !important;
     text-shadow: calc(var(--u) * 0.25) calc(var(--u) * 0.25) calc(var(--u) * 0.5) rgba(255,255,255,0.8) !important;
     pointer-events: none !important;
+}
+/* スマホ横画面のときだけ1.5:1固定を解除し、残りの画面高さにワイド表示 */
+@media (orientation: landscape) and (max-height: 520px) {
+    .block-container div[data-testid="stVerticalBlock"]:has(iframe):not(:has(div[data-testid="stVerticalBlock"])) {
+        aspect-ratio: auto !important;
+        height: calc(100vh - 84px) !important;
+        height: calc(100dvh - 84px) !important;
+    }
 }
 </style>
 """
@@ -469,6 +535,18 @@ div[data-testid="stHorizontalBlock"]:has(div[data-testid="stCheckbox"]) div[data
 div[data-testid="stCheckbox"]:has(input:checked) label p {
     color: #60a5fa !important;
     font-weight: bold !important;
+}
+/* スマホ横画面のときだけ1.5:1固定を解除し、残りの画面高さにワイド表示 */
+@media (orientation: landscape) and (max-height: 520px) {
+    div[data-testid="stVerticalBlock"]:has(.back-progress-text):not(:has(div[data-testid="stPopover"])) {
+        aspect-ratio: auto !important;
+        height: calc(100vh - 84px) !important;
+        height: calc(100dvh - 84px) !important;
+    }
+    div[data-testid="stCheckbox"] label p,
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stCheckbox"]) div[data-testid="stCheckbox"] label p {
+        font-size: max(12px, calc(var(--u) * 1.9)) !important;
+    }
 }
 </style>
 """
