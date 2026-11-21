@@ -369,6 +369,11 @@ div[data-testid="stButton"] button:hover {
     div[data-testid="stButton"] button p {
         font-size: max(11px, calc(var(--u) * 1.75)) !important;
     }
+    /* フッターの切り替えボタンを右下のマークとかぶらない中央位置へ寄せる */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stButton"], div.stButton) > div[data-testid="stColumn"]:last-child,
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="stButton"], div.stButton) > div[data-testid="column"]:last-child {
+        margin-right: 38% !important;
+    }
 }
 </style>
 """
@@ -435,10 +440,10 @@ if st.session_state.is_front:
     text-shadow: calc(var(--u) * 0.25) calc(var(--u) * 0.25) calc(var(--u) * 0.5) rgba(255,255,255,0.8) !important;
     pointer-events: none !important;
 }
-/* スマホ横画面のときだけ縦横比を横長ワイド（2.55:1）に変更して確実に表示 */
+/* スマホ横画面のときだけ縦横比を縦いっぱいのワイド（2.05:1）に変更 */
 @media (orientation: landscape) and (max-height: 520px) {
     .block-container div[data-testid="stVerticalBlock"]:has(iframe):not(:has(div[data-testid="stVerticalBlock"])) {
-        aspect-ratio: 2.55 / 1 !important;
+        aspect-ratio: 2.05 / 1 !important;
         height: auto !important;
     }
 }
@@ -533,10 +538,10 @@ div[data-testid="stCheckbox"]:has(input:checked) label p {
     color: #60a5fa !important;
     font-weight: bold !important;
 }
-/* スマホ横画面のときだけ縦横比を横長ワイド（2.55:1）に変更して確実に表示 */
+/* スマホ横画面のときだけ縦横比を縦いっぱいのワイド（2.05:1）に変更 */
 @media (orientation: landscape) and (max-height: 520px) {
     div[data-testid="stVerticalBlock"]:has(.back-progress-text):not(:has(div[data-testid="stPopover"])) {
-        aspect-ratio: 2.55 / 1 !important;
+        aspect-ratio: 2.05 / 1 !important;
         height: auto !important;
     }
     div[data-testid="stCheckbox"] label p,
