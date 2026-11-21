@@ -62,17 +62,34 @@ def load_dam_data_from_sheet():
     df["緯度"] = pd.to_numeric(df["緯度"], errors="coerce")
     df["経度"] = pd.to_numeric(df["経度"], errors="coerce")
     df["訪問済"] = df["訪問済"].apply(parse_visited_flag)
+    # 県名・県内No・表示用ダム名・ピンの色を起動時の1回だけまとめて計算する
+    df["県名"] = df["ダム名"].apply(lambda x: x.split("の")[0] if "の" in x else "その他")
+    df["県内No"] = df.groupby("県名").cumcount() + 1
+    df["表示用ダム名"] = [name.replace(pref + "の", "") for name, pref in zip(df["ダム名"], df["県名"])]
+    df["_hue"] = [sum(ord(c) for c in pref) * 37 % 360 for pref in df["県名"]]
     return df, visited_col_num
 
 # --- データの初期化 ---
-if "dam_data" not in st.session_state or "visited_col_num" not in st.session_state:
+if (
+    "dam_data" not in st.session_state
+    or "visited_col_num" not in st.session_state
+    or "_hue" not in st.session_state.dam_data.columns
+):
     try:
         initial_data, visited_col_num = load_dam_data_from_sheet()
         st.session_state.dam_data = initial_data
         st.session_state.visited_col_num = visited_col_num
+        st.session_state.pref_list = initial_data["県名"].unique().tolist()
+        st.session_state.map_html_cache = {}
     except Exception as e:
         st.error(f"スプレッドシートの読み込みに失敗しました: {e}")
         st.stop()
+
+if "pref_list" not in st.session_state:
+    st.session_state.pref_list = st.session_state.dam_data["県名"].unique().tolist()
+
+if "map_html_cache" not in st.session_state:
+    st.session_state.map_html_cache = {}
 
 # 表裏切り替えフラグの初期化（True: 表面/地図, False: 裏面/リスト）
 if "is_front" not in st.session_state:
@@ -93,48 +110,32 @@ def toggle_visit(idx):
         sheet = get_worksheet()
         sheet.update_cell(sheet_row, visited_col, new_val)
         st.session_state.dam_data.at[idx, '訪問済'] = new_val
+        # 訪問状態が変わったら、地図の一時記憶をクリアして最新の色に更新させる
+        st.session_state.map_html_cache.clear()
     except Exception as e:
         st.error(f"スプレッドシートの更新に失敗しました: {e}")
 
-# --- 地図のカスタムアイコン生成 ---
-def create_custom_icon(pref_name, number, visited):
-    hue = sum(ord(c) for c in pref_name) * 37 % 360
+# --- 地図ピンの共通スタイル（1箇所にまとめて地図データ量を大幅に削減） ---
+PIN_COMMON_STYLE = """
+<style>
+.dp{border-radius:50%;width:24px;height:24px;display:flex;justify-content:center;align-items:center;font-size:11px;font-weight:bold;}
+.dp-v{color:#fff;border:2px solid #fff;box-shadow:2px 2px 4px rgba(0,0,0,0.5);}
+.dp-u{color:#444;border:1px solid #999;box-shadow:1px 1px 2px rgba(0,0,0,0.2);}
+</style>
+"""
+
+# --- 地図のカスタムアイコン生成（軽量版） ---
+def create_custom_icon(hue, number, visited):
     if visited:
-        bg_color = f"hsl({hue}, 100%, 40%)"
-        text_color = "white"
-        border = "2px solid white"
-        shadow = "2px 2px 4px rgba(0,0,0,0.5)"
+        cls = "dp dp-v"
+        bg = f"hsl({hue},100%,40%)"
     else:
-        bg_color = f"hsl({hue}, 20%, 80%)"
-        text_color = "#444444"
-        border = "1px solid #999999"
-        shadow = "1px 1px 2px rgba(0,0,0,0.2)"
-        
-    html = f"""
-    <div style="
-        background-color: {bg_color};
-        color: {text_color};
-        border: {border};
-        border-radius: 50%;
-        width: 24px;
-        height: 24px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        font-size: 11px;
-        font-weight: bold;
-        box-shadow: {shadow};
-    ">
-        {number}
-    </div>
-    """
+        cls = "dp dp-u"
+        bg = f"hsl({hue},20%,80%)"
+    html = f'<div class="{cls}" style="background:{bg}">{number}</div>'
     return folium.DivIcon(html=html, icon_size=(24, 24), icon_anchor=(12, 12))
 
-# --- データの前処理 ---
-st.session_state.dam_data['県名'] = st.session_state.dam_data['ダム名'].apply(lambda x: x.split('の')[0] if 'の' in x else 'その他')
-st.session_state.dam_data['県内No'] = st.session_state.dam_data.groupby('県名').cumcount() + 1
-
-pref_list = st.session_state.dam_data['県名'].unique().tolist()
+pref_list = st.session_state.pref_list
 default_index = pref_list.index('愛知県') if '愛知県' in pref_list else 0
 
 # --- UI上部：都道府県選択（タイトル文字そのものをクリックできるボタンにする） ---
@@ -152,8 +153,7 @@ with st.popover(f"{st.session_state.selected_pref}ダム"):
 selected_pref = st.session_state.selected_pref
 
 # 選択された県のデータに絞り込み
-filtered_df = st.session_state.dam_data[st.session_state.dam_data['県名'] == selected_pref].copy()
-filtered_df['表示用ダム名'] = filtered_df.apply(lambda row: row['ダム名'].replace(row['県名'] + 'の', ''), axis=1)
+filtered_df = st.session_state.dam_data[st.session_state.dam_data['県名'] == selected_pref]
 
 # 進捗の計算
 total_dams = len(filtered_df)
@@ -563,42 +563,79 @@ card_inner = st.container(border=False)
 with card_inner:
     if st.session_state.is_front:
         # 【表面：地図モード】
-        mapbox_token = st.secrets["MAPBOX_TOKEN"]
-        map_tiles = f"https://api.mapbox.com/styles/v1/masachi/cmwhkwtw2005i01sl2oyc3dma/tiles/256/{{z}}/{{x}}/{{y}}?access_token={mapbox_token}"
-        map_attr = "&copy; <a href='https://www.mapbox.com/about/maps/' target='_blank'>Mapbox</a>"
-        
-        # 選択された県の有効な座標データを抽出
-        valid_coords = filtered_df.dropna(subset=["緯度", "経度"])
-        
-        if len(valid_coords) >= 2:
-            min_lat, max_lat = valid_coords["緯度"].min(), valid_coords["緯度"].max()
-            min_lon, max_lon = valid_coords["経度"].min(), valid_coords["経度"].max()
-            center_lat = (min_lat + max_lat) / 2
-            center_lon = (min_lon + max_lon) / 2
-            m = folium.Map(location=[center_lat, center_lon], zoom_start=9, tiles=map_tiles, attr=map_attr)
-            if min_lat != max_lat or min_lon != max_lon:
-                # ピンが枠の端ギリギリにならないよう余白を持たせて自動フィット
-                m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]], padding=(30, 30), max_zoom=11)
-        elif len(valid_coords) == 1:
-            center_lat = valid_coords["緯度"].iloc[0]
-            center_lon = valid_coords["経度"].iloc[0]
-            m = folium.Map(location=[center_lat, center_lon], zoom_start=9, tiles=map_tiles, attr=map_attr)
+        if selected_pref in st.session_state.map_html_cache:
+            # 一度表示した県は記憶済みの地図HTMLを即座に再利用する
+            map_html = st.session_state.map_html_cache[selected_pref]
         else:
-            # ダムが0件の県を選んだ場合の安全ガード（デフォルト位置）
-            m = folium.Map(location=[35.29, 136.93], zoom_start=9, tiles=map_tiles, attr=map_attr)
-        
-        # パターンα：全国のピンを配置（緯度・経度が空欄の行は安全にスキップ）
-        all_valid_dams = st.session_state.dam_data.dropna(subset=["緯度", "経度"])
-        for i, row in all_valid_dams.iterrows():
-            custom_icon = create_custom_icon(row["県名"], row["県内No"], row["訪問済"])
-            folium.Marker(
-                location=[row["緯度"], row["経度"]],
-                popup=f"No.{row['県内No']} {row['ダム名']}",
-                icon=custom_icon
-            ).add_to(m)
-            
-        # 枠の縦横100%に自動追従するHTML形式で地図を描画
-        map_html = m.get_root().render()
+            mapbox_token = st.secrets["MAPBOX_TOKEN"]
+            map_tiles = f"https://api.mapbox.com/styles/v1/masachi/cmwhkwtw2005i01sl2oyc3dma/tiles/256/{{z}}/{{x}}/{{y}}?access_token={mapbox_token}"
+            map_attr = "&copy; <a href='https://www.mapbox.com/about/maps/' target='_blank'>Mapbox</a>"
+
+            # 近隣エリアを表示する余白（目安：上下・左右それぞれ約130km圏内）
+            NEARBY_LAT_MARGIN = 1.2
+            NEARBY_LON_MARGIN = 1.5
+
+            # 選択された県の有効な座標データを抽出
+            valid_coords = filtered_df.dropna(subset=["緯度", "経度"])
+
+            if len(valid_coords) >= 2:
+                min_lat, max_lat = valid_coords["緯度"].min(), valid_coords["緯度"].max()
+                min_lon, max_lon = valid_coords["経度"].min(), valid_coords["経度"].max()
+                center_lat = (min_lat + max_lat) / 2
+                center_lon = (min_lon + max_lon) / 2
+                m = folium.Map(location=[center_lat, center_lon], zoom_start=9, tiles=map_tiles, attr=map_attr)
+                if min_lat != max_lat or min_lon != max_lon:
+                    # ピンが枠の端ギリギリにならないよう余白を持たせて自動フィット
+                    m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]], padding=(30, 30), max_zoom=11)
+            elif len(valid_coords) == 1:
+                center_lat = valid_coords["緯度"].iloc[0]
+                center_lon = valid_coords["経度"].iloc[0]
+                min_lat = max_lat = center_lat
+                min_lon = max_lon = center_lon
+                m = folium.Map(location=[center_lat, center_lon], zoom_start=9, tiles=map_tiles, attr=map_attr)
+            else:
+                # ダムが0件の県を選んだ場合の安全ガード（デフォルト位置）
+                min_lat = max_lat = 35.29
+                min_lon = max_lon = 136.93
+                m = folium.Map(location=[35.29, 136.93], zoom_start=9, tiles=map_tiles, attr=map_attr)
+
+            # ピンの共通スタイルを地図のヘッダーに1回だけ追加
+            m.get_root().header.add_child(folium.Element(PIN_COMMON_STYLE))
+
+            # 選んだ県＋近隣エリアのピンだけを高速抽出して配置
+            all_df = st.session_state.dam_data
+            nearby_mask = (
+                all_df["緯度"].notna()
+                & all_df["経度"].notna()
+                & (
+                    (all_df["県名"] == selected_pref)
+                    | (
+                        all_df["緯度"].between(min_lat - NEARBY_LAT_MARGIN, max_lat + NEARBY_LAT_MARGIN)
+                        & all_df["経度"].between(min_lon - NEARBY_LON_MARGIN, max_lon + NEARBY_LON_MARGIN)
+                    )
+                )
+            )
+            nearby_dams = all_df[nearby_mask]
+
+            for lat, lon, hue, pref_no, dam_name, visited in zip(
+                nearby_dams["緯度"],
+                nearby_dams["経度"],
+                nearby_dams["_hue"],
+                nearby_dams["県内No"],
+                nearby_dams["ダム名"],
+                nearby_dams["訪問済"]
+            ):
+                custom_icon = create_custom_icon(hue, pref_no, visited)
+                folium.Marker(
+                    location=[lat, lon],
+                    popup=f"No.{pref_no} {dam_name}",
+                    icon=custom_icon
+                ).add_to(m)
+
+            # 枠の縦横100%に自動追従するHTML形式で地図を生成し、一時記憶する
+            map_html = m.get_root().render()
+            st.session_state.map_html_cache[selected_pref] = map_html
+
         components.html(map_html, height=500, scrolling=False)
         
         # 地図の上に赤文字の進捗を浮かせる
